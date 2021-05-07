@@ -139,6 +139,14 @@ void InteractionPass::execute(RenderContext* pRenderContext, const RenderData& r
             mpFence->syncCpu();
             mpPixelData = *reinterpret_cast<const PixelData*>(mpPixelDataStaging->map(Buffer::MapType::Read));
 
+            if (mpPixelData.meshID != PixelData::kInvalidID)
+            {
+                glm::mat4 transform = mpScene->getAnimationController()->getGlobalMatrices()[mpScene->getMeshInstance(mpPixelData.meshInstanceID).globalMatrixID];
+                mTranslation = transform[3].xyz;
+                mScaling = glm::vec3(glm::length(transform[0]), glm::length(transform[1]), glm::length(transform[2]));
+                mRotation = glm::eulerAngles(glm::quat_cast(transform));
+            }
+
             mRightMouseClicked = false;
             mPixelDataAvailable = true;
         }
@@ -181,14 +189,35 @@ void InteractionPass::renderUI(Gui::Widgets& widget)
         std::ostringstream oss;
         if (mpPixelData.meshID != PixelData::kInvalidID)
         {
-            glm::mat4 transform = mpScene->getAnimationController()->getGlobalMatrices()[mpScene->getMeshInstance(mpPixelData.meshInstanceID).globalMatrixID];
+            uint matID = mpScene->getMeshInstance(mpPixelData.meshInstanceID).globalMatrixID;
+            glm::mat4 transform = mpScene->getAnimationController()->getGlobalMatrices()[matID];
             oss << "Selected Mesh:" << std::endl
                 << "Mesh ID: " << mpPixelData.meshID << std::endl
                 << "Mesh name: " << (mpScene->hasMesh(mpPixelData.meshID) ? mpScene->getMeshName(mpPixelData.meshID) : "unknown") << std::endl
                 << "Mesh instance ID: " << mpPixelData.meshInstanceID << std::endl
-                << "Material ID: " << mpPixelData.materialID << std::endl
-                << "Position:" << std::endl
-                << "x: " << transform[3].x << " y: " << transform[3].y << " z: " << transform[3].z << std::endl;
+                << "Material ID: " << mpPixelData.materialID << std::endl;
+
+            Falcor::Animation::SharedPtr ptr = Falcor::Animation::create("interaction_hack", matID, 0.0);
+            Falcor::Animation::Keyframe kf;
+            kf.rotation = glm::quat(mRotation);
+            kf.scaling = mScaling;
+            kf.translation = mTranslation;
+            kf.time = 0.0f;
+            ptr->addKeyframe(kf);
+            ptr->setPostInfinityBehavior(Falcor::Animation::Behavior::Constant);
+
+            for (auto& anim : mpScene->getAnimations())
+            {
+                if (anim->getName() == "interaction_hack")
+                {
+                    anim = ptr;
+                    ptr.reset();
+                    break;
+                }
+            }
+
+            if (ptr)
+                mpScene->getAnimations().push_back(ptr);
         }
         else if (mpPixelData.curveInstanceID != PixelData::kInvalidID)
         {
@@ -201,6 +230,10 @@ void InteractionPass::renderUI(Gui::Widgets& widget)
             oss << "Background pixel" << std::endl;
         }
         widget.text(oss.str());
+
+        widget.var("Translation", mTranslation);
+        widget.var("Scaling", mScaling);
+        widget.var("Rotation", mRotation);
 
         mpPixelDataStaging->unmap();
     }
