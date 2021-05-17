@@ -46,6 +46,7 @@ ParameterBlock<PathTracerData> gData;
 RWTexture2D<float4> gOutputColor;
 RWTexture2D<float4> gOutputAlbedo;
 RWTexture2D<uint> gOutputTime;
+Texture2D<uint2> gPixelMap;
 
 // Static configuration based on which buffers are bound.
 #define isValid(name) (is_valid_##name != 0)
@@ -127,6 +128,13 @@ void rayGen()
     uint2 launchIndex = DispatchRaysIndex().xy;
     uint2 launchDim = DispatchRaysDimensions().xy;
 
+    uint2 blocks_per_dim = launchDim / TILE_SIZE;
+    uint2 pixels_per_dim = blocks_per_dim * TILE_SIZE;
+    if(launchIndex.x >= pixels_per_dim.x || launchIndex.y >= pixels_per_dim.y)
+    {
+        return;
+    }
+
     logSetPixel(launchIndex);
     printSetPixel(launchIndex);
 
@@ -139,7 +147,14 @@ void rayGen()
 
     HitInfo hit;
     ShadingData sd;
-    if (loadShadingData(launchIndex, launchDim, gScene.camera, sd, hit))
+
+    int block = (launchIndex.y/TILE_SIZE) * blocks_per_dim.x + (launchIndex.x/TILE_SIZE);
+    int lookupID = block / RENDER_SAMPLES;
+    uint2 blockCoord = uint2(lookupID%blocks_per_dim.x, lookupID/blocks_per_dim.x);
+    uint2 targetBlock = gPixelMap.Load(int3(blockCoord, 0));
+    uint2 targetPixel = targetBlock * TILE_SIZE + launchIndex%TILE_SIZE;
+
+    if (loadShadingData(targetPixel, launchDim, gScene.camera, sd, hit))
     {
         // Pixel represents a primary hit. Compute its contribution.
 

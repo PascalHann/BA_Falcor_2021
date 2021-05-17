@@ -60,6 +60,23 @@ private:
     void prepareVars();
     void setTracerData(const RenderData& renderData);
 
+
+    ComputeProgram::SharedPtr  mpProgram;   ///< Accumulation programs, one per mode.
+    ComputeVars::SharedPtr      mpVars;                         ///< Program variables.
+    ComputeState::SharedPtr     mpState;
+
+    Texture::SharedPtr blockTex;
+    Texture::SharedPtr reduceTex;
+    Texture::SharedPtr accumTex;
+
+    std::vector<uint2> blockUpdates;
+    uint tileSize = 16;
+    uint renderSamples = 16;
+    std::queue<uint2> tileQueue;
+    std::queue<uint2> baseQueue;
+
+    bool reset;
+
     // Ray tracing program.
     struct
     {

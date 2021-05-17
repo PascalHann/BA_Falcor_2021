@@ -33,6 +33,7 @@
 namespace
 {
     const char kShaderFile[] = "RenderPasses/MegakernelPathTracer/PathTracer.rt.slang";
+    const char kReduceFile[] = "RenderPasses/MegakernelPathTracer/Reduce.slang";
     const char kParameterBlockName[] = "gData";
 
     // Ray tracing settings that affect the traversal stack size.
@@ -64,7 +65,7 @@ extern "C" __declspec(dllexport) const char* getProjDir()
     return PROJECT_DIR;
 }
 
-extern "C" __declspec(dllexport) void getPasses(Falcor::RenderPassLibrary& lib)
+extern "C" __declspec(dllexport) void getPasses(Falcor::RenderPassLibrary & lib)
 {
     lib.registerClass("MegakernelPathTracer", MegakernelPathTracer::sDesc, MegakernelPathTracer::create);
 }
@@ -84,8 +85,20 @@ MegakernelPathTracer::MegakernelPathTracer(const Dictionary& dict)
     progDesc.addHitGroup(kRayTypeShadow, "", "shadowAnyHit").addMiss(kRayTypeShadow, "shadowMiss");
     progDesc.addDefine("MAX_BOUNCES", std::to_string(mSharedParams.maxBounces));
     progDesc.addDefine("SAMPLES_PER_PIXEL", std::to_string(mSharedParams.samplesPerPixel));
+    progDesc.addDefine("TILE_SIZE", std::to_string(tileSize));
+    progDesc.addDefine("RENDER_SAMPLES", std::to_string(renderSamples));
     progDesc.setMaxTraceRecursionDepth(kMaxRecursionDepth);
     mTracer.pProgram = RtProgram::create(progDesc, kMaxPayloadSizeBytes, kMaxAttributesSizeBytes);
+
+    blockTex = Texture::create2D(1920, 1080, Falcor::ResourceFormat::RG32Uint, 1, 1);
+    reduceTex = Texture::create2D(1920, 1080, Falcor::ResourceFormat::RGBA32Float, 1, 1, 0, Falcor::ResourceBindFlags::UnorderedAccess);
+
+    // Note only compensated summation needs precise floating-point mode.
+    auto defs = Program::DefineList();
+    defs.add("TILE_SIZE", std::to_string(tileSize));
+    mpProgram = ComputeProgram::createFromFile(kReduceFile, "reduce", defs, Shader::CompilerFlags::TreatWarningsAsErrors);
+    mpVars = ComputeVars::create(mpProgram->getReflector());
+    mpState = ComputeState::create();
 }
 
 void MegakernelPathTracer::setScene(RenderContext* pRenderContext, const Scene::SharedPtr& pScene)
@@ -102,6 +115,38 @@ void MegakernelPathTracer::execute(RenderContext* pRenderContext, const RenderDa
 {
     // Call shared pre-render code.
     if (!beginFrame(pRenderContext, renderData)) return;
+
+    uint2 gridDim = uint2(renderData.getDefaultTextureDims().xy / uint2(tileSize, tileSize));
+    uint maxPossible = gridDim.x * gridDim.y;
+
+    if (baseQueue.empty())
+    {
+        for (uint y = 0; y < gridDim.y; y++)
+        {
+            for (uint x = 0; x < gridDim.x; x++)
+            {
+                baseQueue.push(uint2(x, y));
+            }
+        }
+    }
+
+    blockUpdates.clear();
+    int tilesServed = 0;
+    for (uint b = 0; (b + renderSamples) <= maxPossible; b += renderSamples)
+    {
+        if (tileQueue.empty())
+        {
+            tileQueue = baseQueue;
+        }
+
+        uint2 block = tileQueue.front();
+        tileQueue.pop();
+        blockUpdates.push_back(block);
+        tilesServed++;
+    }
+
+    uint3 region = uint3(gridDim, 1);
+    pRenderContext->updateSubresourceData(blockTex.get(), 0, blockUpdates.data(), Falcor::uint3(0, 0, 0), region);
 
     // Set compile-time constants.
     RtProgram::SharedPtr pProgram = mTracer.pProgram;
@@ -139,6 +184,8 @@ void MegakernelPathTracer::execute(RenderContext* pRenderContext, const RenderDa
     for (auto channel : mInputChannels) bind(channel);
     for (auto channel : mOutputChannels) bind(channel);
 
+    mTracer.pVars->getRootVar()["gPixelMap"] = blockTex;
+
     // Get dimensions of ray dispatch.
     const uint2 targetDim = renderData.getDefaultTextureDims();
     assert(targetDim.x > 0 && targetDim.y > 0);
@@ -150,6 +197,21 @@ void MegakernelPathTracer::execute(RenderContext* pRenderContext, const RenderDa
     {
         PROFILE("MegakernelPathTracer::execute()_RayTrace");
         mpScene->raytrace(pRenderContext, mTracer.pProgram.get(), mTracer.pVars, uint3(targetDim, 1));
+    }
+
+    mpVars["PerFrameCB"]["gBlockGrid"] = gridDim;
+    mpVars["PerFrameCB"]["gRenderSamples"] = renderSamples;
+    mpVars["gFunTex"] = reduceTex;
+    mpVars["gPixelMap"] = blockTex;
+    mpVars["gInOutFrame"] = renderData["color"]->asTexture();
+
+    pRenderContext->flush(true);
+    mpState->setProgram(mpProgram);
+    for (int r = renderSamples / 2; r > 0; r /= 2)
+    {
+        pRenderContext->uavBarrier(reduceTex.get());
+        mpVars["PerFrameCB"]["gBlockDist"] = r;
+        pRenderContext->dispatch(mpState.get(), mpVars.get(), uint3(tilesServed * r, 1, 1));
     }
 
     // Call shared post-render code.

@@ -40,6 +40,7 @@ cbuffer PerFrameCB
 {
     uint2   gResolution;
     uint    gAccumCount;
+    uint    gClearMode;
 }
 
 // Input data to accumulate and accumulated output.
@@ -62,9 +63,23 @@ void accumulateSingle(uint3 dispatchThreadId : SV_DispatchThreadID)
     const uint2 pixelPos = dispatchThreadId.xy;
     const float4 curColor = gCurFrame[pixelPos];
 
+    if(gClearMode == 2)
+    {
+        gLastFrameSum[pixelPos] = float4(0,0,0,0);
+        gOutputFrame[pixelPos] = float4(0,0,0,0);
+    }
+    if (curColor.w == 0)
+    {
+        if(gClearMode == 1)
+        {
+            gLastFrameSum[pixelPos] = float4(0,0,0,0);
+        }
+        return;
+    }
+
     // Fetch previous sum and compute the new sum.
     float4 sum = gLastFrameSum[pixelPos] + curColor;
-    float4 output = sum / (gAccumCount + 1);
+    float4 output = sum / sum.w;
 
     gLastFrameSum[pixelPos] = sum;
     gOutputFrame[pixelPos] = output;

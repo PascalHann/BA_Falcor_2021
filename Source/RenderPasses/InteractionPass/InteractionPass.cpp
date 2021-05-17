@@ -141,10 +141,21 @@ void InteractionPass::execute(RenderContext* pRenderContext, const RenderData& r
 
             if (mpPixelData.meshID != PixelData::kInvalidID)
             {
+
                 glm::mat4 transform = mpScene->getAnimationController()->getGlobalMatrices()[mpScene->getMeshInstance(mpPixelData.meshInstanceID).globalMatrixID];
+
+                for (int i = 0; i < 4; i++)
+                {
+                    for (int j = 0; j < 4; j++)
+                    {
+                        std::cout << transform[i][j] << " ";
+                    }
+                    std::cout << std::endl;
+                }
                 mTranslation = transform[3].xyz;
                 mScaling = glm::vec3(glm::length(transform[0]), glm::length(transform[1]), glm::length(transform[2]));
-                mRotation = glm::eulerAngles(glm::quat_cast(transform));
+                auto roti = glm::mat4(transform[0] / mScaling[0], transform[1] / mScaling[1], transform[2] / mScaling[2], transform[3]);
+                mRotation = glm::eulerAngles(glm::quat_cast(roti));
             }
 
             mRightMouseClicked = false;
@@ -195,7 +206,9 @@ void InteractionPass::renderUI(Gui::Widgets& widget)
                 << "Mesh ID: " << mpPixelData.meshID << std::endl
                 << "Mesh name: " << (mpScene->hasMesh(mpPixelData.meshID) ? mpScene->getMeshName(mpPixelData.meshID) : "unknown") << std::endl
                 << "Mesh instance ID: " << mpPixelData.meshInstanceID << std::endl
-                << "Material ID: " << mpPixelData.materialID << std::endl;
+                << "Matrix ID: " << matID << std::endl
+                << "Material ID: " << mpPixelData.materialID << std::endl
+                << "Num Mats: " << mpScene->getAnimationController()->getGlobalMatrices().size() << std::endl;
 
             Falcor::Animation::SharedPtr ptr = Falcor::Animation::create("interaction_hack", matID, 0.0);
             Falcor::Animation::Keyframe kf;

@@ -890,7 +890,8 @@ namespace Falcor
 
             // Skip instanced/animated/skinned meshes.
             assert(!mesh.instances.empty());
-            if (mesh.instances.size() > 1 || isNodeAnimated(mesh.instances[0]) || mesh.hasDynamicData) continue;
+            //if (mesh.instances.size() > 1 || isNodeAnimated(mesh.instances[0]) || mesh.hasDynamicData)
+                continue;
 
             assert(mesh.dynamicData.empty() && mesh.dynamicVertexCount == 0);
             mesh.isStatic = true;

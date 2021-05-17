@@ -38,6 +38,7 @@
   <ItemGroup>
     <ShaderSource Include="PathTracer.rt.slang" />
     <ShaderSource Include="PathTracer.slang" />
+    <ShaderSource Include="Reduce.slang" />
   </ItemGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>

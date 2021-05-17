@@ -27,7 +27,7 @@
  **************************************************************************/
 #include "AccumulatePass.h"
 
-// Don't remove this. it's required for hot-reload to function properly
+ // Don't remove this. it's required for hot-reload to function properly
 extern "C" __declspec(dllexport) const char* getProjDir()
 {
     return PROJECT_DIR;
@@ -44,7 +44,7 @@ static void regAccumulatePass(pybind11::module& m)
     precision.value("SingleCompensated", AccumulatePass::Precision::SingleCompensated);
 }
 
-extern "C" __declspec(dllexport) void getPasses(Falcor::RenderPassLibrary& lib)
+extern "C" __declspec(dllexport) void getPasses(Falcor::RenderPassLibrary & lib)
 {
     lib.registerClass("AccumulatePass", "Temporal accumulation", AccumulatePass::create);
     ScriptBindings::registerBinding(regAccumulatePass);
@@ -187,6 +187,7 @@ void AccumulatePass::execute(RenderContext* pRenderContext, const RenderData& re
     // Set shader parameters.
     mpVars["PerFrameCB"]["gResolution"] = resolution;
     mpVars["PerFrameCB"]["gAccumCount"] = mFrameCount++;
+    mpVars["PerFrameCB"]["gClearMode"] = mClearMode;
     mpVars["gCurFrame"] = pSrc;
     mpVars["gOutputFrame"] = pDst;
 
@@ -259,8 +260,13 @@ void AccumulatePass::prepareAccumulation(RenderContext* pRenderContext, uint32_t
         // Clear data if accumulation has been reset (either above or somewhere else).
         if (mFrameCount == 0)
         {
-            if (getFormatType(format) == FormatType::Float) pRenderContext->clearUAV(pBuf->getUAV().get(), float4(0.f));
-            else pRenderContext->clearUAV(pBuf->getUAV().get(), uint4(0));
+            mClearMode = 2;
+            //if (getFormatType(format) == FormatType::Float) pRenderContext->clearUAV(pBuf->getUAV().get(), float4(0.f));
+            //else pRenderContext->clearUAV(pBuf->getUAV().get(), uint4(0));
+        }
+        else
+        {
+            mClearMode = 0;
         }
     };
 

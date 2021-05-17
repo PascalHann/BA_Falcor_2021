@@ -73,6 +73,8 @@ protected:
     AccumulatePass(const Dictionary& dict);
     void prepareAccumulation(RenderContext* pRenderContext, uint32_t width, uint32_t height);
 
+    uint32_t                    mClearMode = 2;
+
     // Internal state
     Scene::SharedPtr            mpScene;                        ///< The current scene (or nullptr if no scene).
     std::map<Precision, ComputeProgram::SharedPtr> mpProgram;   ///< Accumulation programs, one per mode.
