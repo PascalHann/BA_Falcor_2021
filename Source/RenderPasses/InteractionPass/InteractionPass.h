@@ -66,6 +66,7 @@ private:
     PixelData mpPixelData;                    ///< pixel data mapped from buffer
     bool mPixelDataAvailable = false;
     bool mRightMouseClicked = false;
+    bool mUserChangedScene = false;
 
     float3 mTranslation;
     float3 mScaling;

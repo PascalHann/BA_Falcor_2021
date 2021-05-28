@@ -59,6 +59,7 @@ private:
     void recreateVars() override { mTracer.pVars = nullptr; }
     void prepareVars();
     void setTracerData(const RenderData& renderData);
+    void buildSpiralQueue(uint2 point_of_change, uint2 gridDim);
 
 
     ComputeProgram::SharedPtr  mpProgram;   ///< Accumulation programs, one per mode.
@@ -74,6 +75,7 @@ private:
     uint renderSamples = 16;
     std::queue<uint2> tileQueue;
     std::queue<uint2> baseQueue;
+    std::queue<uint2> spiralQueue;
 
     bool reset;
 

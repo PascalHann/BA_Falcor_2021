@@ -35,6 +35,9 @@ namespace
     const char kShaderFile[] = "RenderPasses/MegakernelPathTracer/PathTracer.rt.slang";
     const char kReduceFile[] = "RenderPasses/MegakernelPathTracer/Reduce.slang";
     const char kParameterBlockName[] = "gData";
+    //Point on the screen where a change occured. The path-tracer should update the image starting from this point.
+    const char point_of_change[] = "point_of_change";
+    const char change_occured[] = "change_occured";
 
     // Ray tracing settings that affect the traversal stack size.
     // These should be set as small as possible.
@@ -130,13 +133,25 @@ void MegakernelPathTracer::execute(RenderContext* pRenderContext, const RenderDa
         }
     }
 
+    InternalDictionary& dict = renderData.getDictionary();
+    if (dict.keyExists(point_of_change) && dict[change_occured])
+    {
+        buildSpiralQueue(dict[point_of_change], gridDim);
+        renderSamples = 512;
+    }
+    else
+        renderSamples = 16;
+
     blockUpdates.clear();
     int tilesServed = 0;
     for (uint b = 0; (b + renderSamples) <= maxPossible; b += renderSamples)
     {
         if (tileQueue.empty())
         {
-            tileQueue = baseQueue;
+            if (dict.keyExists(point_of_change) && dict[change_occured])
+                tileQueue = spiralQueue;
+            else
+                tileQueue = baseQueue;
         }
 
         uint2 block = tileQueue.front();
@@ -216,6 +231,46 @@ void MegakernelPathTracer::execute(RenderContext* pRenderContext, const RenderDa
 
     // Call shared post-render code.
     endFrame(pRenderContext, renderData);
+}
+
+void MegakernelPathTracer::buildSpiralQueue(uint2 point_of_change, uint2 gridDim)
+{
+    uint2 grid_PoC = point_of_change / uint2(tileSize, tileSize);
+
+    std::queue<uint2> empty;
+    spiralQueue.swap(empty);
+
+    spiralQueue.push(grid_PoC);
+
+    int x = grid_PoC.x;
+    int y = grid_PoC.y;
+    int steps = 1;
+    int direction = 0;
+    while (spiralQueue.size() < gridDim.x * gridDim.y)
+    {
+        for (int j = 0; j < steps; j++) {
+            switch (direction)
+            {
+                case 0: x++; break; //RIGHT
+                case 1: y++; break; //DOWN
+                case 2: x--; break; //LEFT
+                case 3: y--; break; //UP
+            }
+
+            // unoptimal solution for the fact that the PoC may not be centered
+            // and the grid may not be symmetrical
+            // TODO: optimize this
+            if (x >= 0 && y >= 0 && x < (int)gridDim.x && y < (int)gridDim.y)
+            {
+                spiralQueue.push(uint2(x, y));
+            }
+        }
+        direction = (direction + 1) % 4;
+
+        // every two turns the step size increases
+        if ((direction % 2) == 0)
+            steps++;
+    }
 }
 
 void MegakernelPathTracer::prepareVars()

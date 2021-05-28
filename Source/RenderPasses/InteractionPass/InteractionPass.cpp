@@ -35,6 +35,9 @@ namespace
     const char in[] = "src";
     const char kShaderFile[] = "RenderPasses/InteractionPass/InteractionPass.cs.slang";
     const char kShaderModel[] = "6_5";
+    //Point on the screen where a change occured. The path-tracer should update the image starting from this point.
+    const char point_of_change[] = "point_of_change";
+    const char change_occured[] = "change_occured";
 
     const std::string kOutput = "output";
 }
@@ -134,7 +137,8 @@ void InteractionPass::execute(RenderContext* pRenderContext, const RenderData& r
         pRenderContext->flush(false);
         mpFence->gpuSignal(pRenderContext->getLowLevelData()->getCommandQueue());
 
-        if (mRightMouseClicked) {
+        if (mRightMouseClicked)
+        {
             assert(mpPixelDataStaging);
             mpFence->syncCpu();
             mpPixelData = *reinterpret_cast<const PixelData*>(mpPixelDataStaging->map(Buffer::MapType::Read));
@@ -160,6 +164,18 @@ void InteractionPass::execute(RenderContext* pRenderContext, const RenderData& r
 
             mRightMouseClicked = false;
             mPixelDataAvailable = true;
+        }
+
+        //Set parameters for path-tracer
+        InternalDictionary& dict = renderData.getDictionary();
+        if (mUserChangedScene)
+        {
+            dict[point_of_change] = mParams.selectedPixel;
+            dict[change_occured] = true;
+        }
+        else
+        {
+            dict[change_occured] = false;
         }
 
         mParams.frameCount++;
@@ -210,27 +226,37 @@ void InteractionPass::renderUI(Gui::Widgets& widget)
                 << "Material ID: " << mpPixelData.materialID << std::endl
                 << "Num Mats: " << mpScene->getAnimationController()->getGlobalMatrices().size() << std::endl;
 
-            Falcor::Animation::SharedPtr ptr = Falcor::Animation::create("interaction_hack", matID, 0.0);
-            Falcor::Animation::Keyframe kf;
-            kf.rotation = glm::quat(mRotation);
-            kf.scaling = mScaling;
-            kf.translation = mTranslation;
-            kf.time = 0.0f;
-            ptr->addKeyframe(kf);
-            ptr->setPostInfinityBehavior(Falcor::Animation::Behavior::Constant);
-
-            for (auto& anim : mpScene->getAnimations())
+            if (mUserChangedScene)
             {
-                if (anim->getName() == "interaction_hack")
-                {
-                    anim = ptr;
-                    ptr.reset();
-                    break;
-                }
-            }
 
-            if (ptr)
-                mpScene->getAnimations().push_back(ptr);
+                Falcor::Animation::SharedPtr ptr = Falcor::Animation::create("interaction_hack", matID, 0.0);
+                Falcor::Animation::Keyframe kf;
+                kf.rotation = glm::quat(mRotation);
+                kf.scaling = mScaling;
+                kf.translation = mTranslation;
+                kf.time = 0.0f;
+                ptr->addKeyframe(kf);
+                ptr->setPostInfinityBehavior(Falcor::Animation::Behavior::Constant);
+
+                for (auto& anim : mpScene->getAnimations())
+                {
+                    if (anim->getName() == "interaction_hack")
+                    {
+                        anim = ptr;
+                        ptr.reset();
+                        break;
+                    }
+                }
+
+                if (ptr)
+                    mpScene->getAnimations().push_back(ptr);
+
+                mUserChangedScene = false;
+            }
+            else
+            {
+                mpScene->getAnimations().clear();
+            }
         }
         else if (mpPixelData.curveInstanceID != PixelData::kInvalidID)
         {
@@ -244,9 +270,9 @@ void InteractionPass::renderUI(Gui::Widgets& widget)
         }
         widget.text(oss.str());
 
-        widget.var("Translation", mTranslation);
-        widget.var("Scaling", mScaling);
-        widget.var("Rotation", mRotation);
+        mUserChangedScene = mUserChangedScene || widget.var("Translation", mTranslation);
+        mUserChangedScene = mUserChangedScene || widget.var("Scaling", mScaling);
+        mUserChangedScene = mUserChangedScene || widget.var("Rotation", mRotation);
 
         mpPixelDataStaging->unmap();
     }
