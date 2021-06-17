@@ -57,6 +57,9 @@ namespace
     const char kInputChannel[] = "input";
     const char kOutputChannel[] = "output";
 
+    //Clearmode for accumulate pass
+    const char clear_mode[] = "clear_mode";
+
     // Serialized parameters
     const char kEnableAccumulation[] = "enableAccumulation";
     const char kAutoReset[] = "autoReset";
@@ -151,11 +154,11 @@ void AccumulatePass::execute(RenderContext* pRenderContext, const RenderData& re
             if (mpScene)
             {
                 auto sceneUpdates = mpScene->getUpdates();
-                if ((sceneUpdates & ~Scene::UpdateFlags::CameraPropertiesChanged) != Scene::UpdateFlags::None)
-                {
-                    //mFrameCount = 0;
-                    mClearMode = 1;
-                }
+                //if ((sceneUpdates & ~Scene::UpdateFlags::CameraPropertiesChanged) != Scene::UpdateFlags::None)
+                //{
+                //    mFrameCount = 0;
+                //    //mClearMode = 1;
+                //}
                 if (is_set(sceneUpdates, Scene::UpdateFlags::CameraPropertiesChanged))
                 {
                     auto excluded = Camera::Changes::Jitter | Camera::Changes::History;
@@ -163,6 +166,14 @@ void AccumulatePass::execute(RenderContext* pRenderContext, const RenderData& re
                     if ((cameraChanges & ~excluded) != Camera::Changes::None) mFrameCount = 0;
                 }
             }
+
+            if (dict.keyExists(clear_mode))
+            {
+                mClearMode = dict.getValue(clear_mode, 0);
+                if (mClearMode == 2)
+                    mFrameCount = 0;
+            }
+
         }
     }
 
@@ -267,7 +278,7 @@ void AccumulatePass::prepareAccumulation(RenderContext* pRenderContext, uint32_t
         }
         else
         {
-            mClearMode = 0;
+            //mClearMode = 0;
         }
     };
 

@@ -38,6 +38,8 @@ namespace
     //Point on the screen where a change occured. The path-tracer should update the image starting from this point.
     const char point_of_change[] = "point_of_change";
     const char change_occured[] = "change_occured";
+    //Clearmode for accumulate pass
+    const char clear_mode[] = "clear_mode";
 
     // Ray tracing settings that affect the traversal stack size.
     // These should be set as small as possible.
@@ -89,7 +91,7 @@ MegakernelPathTracer::MegakernelPathTracer(const Dictionary& dict)
     progDesc.addDefine("MAX_BOUNCES", std::to_string(mSharedParams.maxBounces));
     progDesc.addDefine("SAMPLES_PER_PIXEL", std::to_string(mSharedParams.samplesPerPixel));
     progDesc.addDefine("TILE_SIZE", std::to_string(tileSize));
-    progDesc.addDefine("RENDER_SAMPLES", std::to_string(renderSamples));
+    //progDesc.addDefine("RENDER_SAMPLES", std::to_string(renderSamples));
     progDesc.setMaxTraceRecursionDepth(kMaxRecursionDepth);
     mTracer.pProgram = RtProgram::create(progDesc, kMaxPayloadSizeBytes, kMaxAttributesSizeBytes);
 
@@ -134,13 +136,31 @@ void MegakernelPathTracer::execute(RenderContext* pRenderContext, const RenderDa
     }
 
     InternalDictionary& dict = renderData.getDictionary();
+    //dict[clear_mode] = 0;
     if (dict.keyExists(point_of_change) && dict[change_occured])
     {
+        /*buildSpiralQueue(uint2(renderData.getDefaultTextureDims().xy / uint2(2,2)), gridDim);*/
         buildSpiralQueue(dict[point_of_change], gridDim);
+        tileQueue = spiralQueue;
         renderSamples = 512;
+        dict[clear_mode] = 1;
     }
-    else
-        renderSamples = 16;
+
+    /*if (mpScene)
+    {
+        auto sceneUpdates = mpScene->getUpdates();
+        if (is_set(sceneUpdates, Scene::UpdateFlags::CameraPropertiesChanged))
+        {
+            auto excluded = Camera::Changes::Jitter | Camera::Changes::History;
+            auto cameraChanges = mpScene->getCamera()->getChanges();
+            if ((cameraChanges & ~excluded) != Camera::Changes::None)
+            {
+                tileQueue = baseQueue;
+                renderSamples = 16;
+                dict[clear_mode] = 2;
+            }
+        }
+    }*/
 
     blockUpdates.clear();
     int tilesServed = 0;
@@ -148,10 +168,8 @@ void MegakernelPathTracer::execute(RenderContext* pRenderContext, const RenderDa
     {
         if (tileQueue.empty())
         {
-            if (dict.keyExists(point_of_change) && dict[change_occured])
-                tileQueue = spiralQueue;
-            else
-                tileQueue = baseQueue;
+            tileQueue = baseQueue;
+            //dict[clear_mode] = 0;
         }
 
         uint2 block = tileQueue.front();
@@ -200,6 +218,7 @@ void MegakernelPathTracer::execute(RenderContext* pRenderContext, const RenderDa
     for (auto channel : mOutputChannels) bind(channel);
 
     mTracer.pVars->getRootVar()["gPixelMap"] = blockTex;
+    mTracer.pVars->getRootVar()["PerFrameCB"]["RENDER_SAMPLES"] = renderSamples;
 
     // Get dimensions of ray dispatch.
     const uint2 targetDim = renderData.getDefaultTextureDims();

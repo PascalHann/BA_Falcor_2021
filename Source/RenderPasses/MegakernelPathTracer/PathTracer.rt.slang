@@ -48,6 +48,12 @@ RWTexture2D<float4> gOutputAlbedo;
 RWTexture2D<uint> gOutputTime;
 Texture2D<uint2> gPixelMap;
 
+//INPUT
+cbuffer PerFrameCB
+{
+    uint RENDER_SAMPLES;
+}
+
 // Static configuration based on which buffers are bound.
 #define isValid(name) (is_valid_##name != 0)
 
