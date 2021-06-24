@@ -46,7 +46,7 @@ ParameterBlock<PathTracerData> gData;
 RWTexture2D<float4> gOutputColor;
 RWTexture2D<float4> gOutputAlbedo;
 RWTexture2D<uint> gOutputTime;
-Texture2D<uint2> gPixelMap;
+Texture2D<int2> gPixelMap;
 
 //INPUT
 cbuffer PerFrameCB
@@ -157,7 +157,13 @@ void rayGen()
     int block = (launchIndex.y/TILE_SIZE) * blocks_per_dim.x + (launchIndex.x/TILE_SIZE);
     int lookupID = block / RENDER_SAMPLES;
     uint2 blockCoord = uint2(lookupID%blocks_per_dim.x, lookupID/blocks_per_dim.x);
-    uint2 targetBlock = gPixelMap.Load(int3(blockCoord, 0));
+    int2 targetBlock = gPixelMap.Load(int3(blockCoord, 0));
+
+    if (targetBlock.x == -1 && targetBlock.y == -1)
+    {
+        return;
+    }
+
     uint2 targetPixel = targetBlock * TILE_SIZE + launchIndex%TILE_SIZE;
 
     if (loadShadingData(targetPixel, launchDim, gScene.camera, sd, hit))

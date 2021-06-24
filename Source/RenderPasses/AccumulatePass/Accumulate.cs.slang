@@ -66,15 +66,10 @@ void accumulateSingle(uint3 dispatchThreadId : SV_DispatchThreadID)
     if(gClearMode == 2)
     {
         gLastFrameSum[pixelPos] = float4(0,0,0,0);
-        gOutputFrame[pixelPos] = float4(0,0,0,0);
     }
-    if (curColor.w == 0)
+    if (gClearMode == 1 && curColor.w != 0)
     {
-        if(gClearMode == 1)
-        {
-            gLastFrameSum[pixelPos] = float4(0,0,0,0);
-        }
-        return;
+        gLastFrameSum[pixelPos] = float4(0,0,0,0);
     }
 
     // Fetch previous sum and compute the new sum.

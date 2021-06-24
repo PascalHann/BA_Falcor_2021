@@ -70,12 +70,14 @@ private:
     Texture::SharedPtr reduceTex;
     Texture::SharedPtr accumTex;
 
-    std::vector<uint2> blockUpdates;
+    std::vector<int2> blockUpdates;
+    std::vector<int2> emptyUpdates;
     uint tileSize = 16;
-    uint renderSamples = 16;
-    std::queue<uint2> tileQueue;
-    std::queue<uint2> baseQueue;
-    std::queue<uint2> spiralQueue;
+    uint highSamples = 32;
+    uint renderSamples = 1;
+    std::queue<int2> tileQueue;
+    std::queue<int2> baseQueue;
+    std::queue<int2> spiralQueue;
 
     bool reset;
 

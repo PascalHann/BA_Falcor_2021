@@ -95,8 +95,11 @@ MegakernelPathTracer::MegakernelPathTracer(const Dictionary& dict)
     progDesc.setMaxTraceRecursionDepth(kMaxRecursionDepth);
     mTracer.pProgram = RtProgram::create(progDesc, kMaxPayloadSizeBytes, kMaxAttributesSizeBytes);
 
-    blockTex = Texture::create2D(1920, 1080, Falcor::ResourceFormat::RG32Uint, 1, 1);
+    uint2 gridDim = uint2(uint2(1920 + tileSize - 1, 1080 + tileSize - 1) / uint2(tileSize, tileSize));
+    blockTex = Texture::create2D(gridDim.x, gridDim.y, Falcor::ResourceFormat::RG32Uint, 1, 1);
     reduceTex = Texture::create2D(1920, 1080, Falcor::ResourceFormat::RGBA32Float, 1, 1, 0, Falcor::ResourceBindFlags::UnorderedAccess);
+
+    emptyUpdates = std::vector<int2>(gridDim.x * gridDim.y, int2(-1, -1));
 
     // Note only compensated summation needs precise floating-point mode.
     auto defs = Program::DefineList();
@@ -118,6 +121,8 @@ void MegakernelPathTracer::setScene(RenderContext* pRenderContext, const Scene::
 
 void MegakernelPathTracer::execute(RenderContext* pRenderContext, const RenderData& renderData)
 {
+    pRenderContext->flush(true);
+
     // Call shared pre-render code.
     if (!beginFrame(pRenderContext, renderData)) return;
 
@@ -136,17 +141,24 @@ void MegakernelPathTracer::execute(RenderContext* pRenderContext, const RenderDa
     }
 
     InternalDictionary& dict = renderData.getDictionary();
-    //dict[clear_mode] = 0;
+
     if (dict.keyExists(point_of_change) && dict[change_occured])
     {
         /*buildSpiralQueue(uint2(renderData.getDefaultTextureDims().xy / uint2(2,2)), gridDim);*/
         buildSpiralQueue(dict[point_of_change], gridDim);
         tileQueue = spiralQueue;
-        renderSamples = 512;
+        renderSamples = highSamples;
         dict[clear_mode] = 1;
     }
 
-    /*if (mpScene)
+    if (tileQueue.empty())
+    {
+        tileQueue = baseQueue;
+        renderSamples = 1;
+        dict[clear_mode] = 0;
+    }
+
+    if (mpScene)
     {
         auto sceneUpdates = mpScene->getUpdates();
         if (is_set(sceneUpdates, Scene::UpdateFlags::CameraPropertiesChanged))
@@ -156,25 +168,22 @@ void MegakernelPathTracer::execute(RenderContext* pRenderContext, const RenderDa
             if ((cameraChanges & ~excluded) != Camera::Changes::None)
             {
                 tileQueue = baseQueue;
-                renderSamples = 16;
+                renderSamples = 1;
                 dict[clear_mode] = 2;
             }
         }
-    }*/
+    }
 
-    blockUpdates.clear();
+    blockUpdates = emptyUpdates;
     int tilesServed = 0;
     for (uint b = 0; (b + renderSamples) <= maxPossible; b += renderSamples)
     {
         if (tileQueue.empty())
-        {
-            tileQueue = baseQueue;
-            //dict[clear_mode] = 0;
-        }
+            break;
 
         uint2 block = tileQueue.front();
         tileQueue.pop();
-        blockUpdates.push_back(block);
+        blockUpdates[tilesServed] = block;
         tilesServed++;
     }
 
@@ -256,7 +265,7 @@ void MegakernelPathTracer::buildSpiralQueue(uint2 point_of_change, uint2 gridDim
 {
     uint2 grid_PoC = point_of_change / uint2(tileSize, tileSize);
 
-    std::queue<uint2> empty;
+    std::queue<int2> empty;
     spiralQueue.swap(empty);
 
     spiralQueue.push(grid_PoC);
@@ -265,6 +274,7 @@ void MegakernelPathTracer::buildSpiralQueue(uint2 point_of_change, uint2 gridDim
     int y = grid_PoC.y;
     int steps = 1;
     int direction = 0;
+
     while (spiralQueue.size() < gridDim.x * gridDim.y)
     {
         for (int j = 0; j < steps; j++) {

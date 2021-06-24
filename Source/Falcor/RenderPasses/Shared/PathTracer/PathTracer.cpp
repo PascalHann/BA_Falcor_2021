@@ -537,13 +537,13 @@ namespace Falcor
         mGBufferAdjustShadingNormals = dict.getValue(Falcor::kRenderPassGBufferAdjustShadingNormals, false);
 
         // If we have no scene, just clear the outputs and return.
+        for (auto it : mOutputChannels)
+        {
+            Texture* pDst = renderData[it.name]->asTexture().get();
+            if (pDst) pRenderContext->clearTexture(pDst, float4(0,0,0,0));
+        }
         if (!mpScene)
         {
-            for (auto it : mOutputChannels)
-            {
-                Texture* pDst = renderData[it.name]->asTexture().get();
-                if (pDst) pRenderContext->clearTexture(pDst);
-            }
             return false;
         }
 
