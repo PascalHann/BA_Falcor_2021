@@ -148,18 +148,21 @@ void InteractionPass::execute(RenderContext* pRenderContext, const RenderData& r
 
                 glm::mat4 transform = mpScene->getAnimationController()->getGlobalMatrices()[mpScene->getMeshInstance(mpPixelData.meshInstanceID).globalMatrixID];
 
-                for (int i = 0; i < 4; i++)
-                {
-                    for (int j = 0; j < 4; j++)
-                    {
-                        std::cout << transform[i][j] << " ";
-                    }
-                    std::cout << std::endl;
-                }
+                //for (int i = 0; i < 4; i++)
+                //{
+                //    for (int j = 0; j < 4; j++)
+                //    {
+                //        std::cout << transform[i][j] << " ";
+                //    }
+                //    std::cout << std::endl;
+                //}
                 mTranslation = transform[3].xyz;
                 mScaling = glm::vec3(glm::length(transform[0]), glm::length(transform[1]), glm::length(transform[2]));
                 auto roti = glm::mat4(transform[0] / mScaling[0], transform[1] / mScaling[1], transform[2] / mScaling[2], transform[3]);
                 mRotation = glm::eulerAngles(glm::quat_cast(roti));
+
+                setSelectedPixelToObjectCenter();
+
             }
 
             mRightMouseClicked = false;
@@ -170,6 +173,7 @@ void InteractionPass::execute(RenderContext* pRenderContext, const RenderData& r
         InternalDictionary& dict = renderData.getDictionary();
         if (mUserChangedScene)
         {
+            setSelectedPixelToObjectCenter();
             dict[point_of_change] = mParams.selectedPixel;
             dict[change_occured] = true;
         }
@@ -193,6 +197,25 @@ void InteractionPass::execute(RenderContext* pRenderContext, const RenderData& r
     {
         logWarning("InteractionPass::execute() - missing an input or output resource");
     }
+}
+
+void InteractionPass::setSelectedPixelToObjectCenter() {
+    AABB bounds = mpScene->getMeshBounds(mpPixelData.meshID);
+    glm::mat4 transform = mpScene->getAnimationController()->getGlobalMatrices()[mpScene->getMeshInstance(mpPixelData.meshInstanceID).globalMatrixID];
+    Falcor::float3 center = bounds.center();
+    mpScene->selectCamera(0);
+    auto camera = mpScene->getCamera();
+    auto& viewProjMatrix = camera->getViewProjMatrix();
+    //  mParams.selectedPixel = viewProjMatrix * Falcor::float4(mTranslation, 1);
+    Falcor::float2 screenDims = mParams.frameDim;
+    Falcor::float4 pixel = viewProjMatrix * transform * Falcor::float4(center, 1);
+    pixel.x = pixel.x / pixel.w;
+    pixel.y = pixel.y / pixel.w;
+    /* pixel.x = (pixel.x + 1) * 0.5 * mParams.frameDim.x;
+     pixel.y = (1 - pixel.y) * 0.5 * mParams.frameDim.y;*/
+    double pixel_x = (pixel.x + 1) * 0.5 * screenDims.x;
+    double pixel_y = (1 - pixel.y) * 0.5 * screenDims.y;
+    mParams.selectedPixel = uint2(pixel_x, pixel_y);
 }
 
 bool InteractionPass::onMouseEvent(const MouseEvent& mouseEvent)
