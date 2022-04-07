@@ -144,34 +144,34 @@ void AccumulatePass::execute(RenderContext* pRenderContext, const RenderData& re
         {
             // Query refresh flags passed down from the application and other passes.
             auto& dict = renderData.getDictionary();
-            auto refreshFlags = dict.getValue(kRenderPassRefreshFlags, RenderPassRefreshFlags::None);
+            //auto refreshFlags = dict.getValue(kRenderPassRefreshFlags, RenderPassRefreshFlags::None);
 
             // If any refresh flag is set, we reset frame accumulation.
-            if (refreshFlags != RenderPassRefreshFlags::None) mFrameCount = 0;
+            //if (refreshFlags != RenderPassRefreshFlags::None) mFrameCount = 0;
 
             // Reset accumulation upon all scene changes, except camera jitter and history changes.
             // TODO: Add UI options to select which changes should trigger reset
-            if (mpScene)
-            {
-                auto sceneUpdates = mpScene->getUpdates();
-                //if ((sceneUpdates & ~Scene::UpdateFlags::CameraPropertiesChanged) != Scene::UpdateFlags::None)
-                //{
-                //    mFrameCount = 0;
-                //    //mClearMode = 1;
-                //}
-                if (is_set(sceneUpdates, Scene::UpdateFlags::CameraPropertiesChanged))
-                {
-                    auto excluded = Camera::Changes::Jitter | Camera::Changes::History;
-                    auto cameraChanges = mpScene->getCamera()->getChanges();
-                    if ((cameraChanges & ~excluded) != Camera::Changes::None) mFrameCount = 0;
-                }
-            }
+            //if (mpScene)
+            //{
+            //    auto sceneUpdates = mpScene->getUpdates();
+            //    //if ((sceneUpdates & ~Scene::UpdateFlags::CameraPropertiesChanged) != Scene::UpdateFlags::None)
+            //    //{
+            //    //    mFrameCount = 0;
+            //    //    //mClearMode = 1;
+            //    //}
+            //    if (is_set(sceneUpdates, Scene::UpdateFlags::CameraPropertiesChanged))
+            //    {
+            //        auto excluded = Camera::Changes::Jitter | Camera::Changes::History;
+            //        auto cameraChanges = mpScene->getCamera()->getChanges();
+            //        if ((cameraChanges & ~excluded) != Camera::Changes::None) mFrameCount = 0;
+            //    }
+            //}
 
             if (dict.keyExists(clear_mode))
             {
                 mClearMode = dict.getValue(clear_mode, 0);
-                if (mClearMode == 2)
-                    mFrameCount = 0;
+                //if (mClearMode == 2)
+                //    mFrameCount = 0;
             }
 
         }
